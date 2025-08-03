@@ -119,34 +119,10 @@ function optimizeClientTextures()
 end
 
 function sendWebhookLog(coords)
-    if not Config.WebhookEnabled then return end
-
-    local name = GetPlayerName(PlayerId())
-    local serverId = GetPlayerServerId(PlayerId())
-
-    function sendWebhookLog(coords)
-    if not Config.WebhookEnabled then return end
+    if type(Config) ~= "table" or not Config.WebhookEnabled then return end
 
     local name = GetPlayerName(PlayerId())
     local serverId = GetPlayerServerId(PlayerId())
 
     TriggerServerEvent("reloadarea:logReload", name, serverId, coords)
-end
-    local data = {
-        username = "Reload Area Log",
-        embeds = {
-            {
-                title = "Area Reloaded",
-                description = string.format("Player: **%s**\nServer ID: **%s**\nCoordinates: **X: %.2f, Y: %.2f, Z: %.2f**", name, serverId, coords.x, coords.y, coords.z),
-                color = 16711680,
-                footer = {
-                    text = "Reload Area Script"
-                }
-            }
-        }
-    }
-
-    PerformHttpRequest(Config.WebhookURL, function() end, "POST", json.encode(data), {
-        ["Content-Type"] = "application/json"
-    })
 end

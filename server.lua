@@ -1,5 +1,5 @@
 RegisterNetEvent("reloadarea:logReload", function(name, serverId, coords)
-    if not Config.WebhookEnabled then return end
+    if type(Config) ~= "table" or not Config.WebhookEnabled or type(Config.WebhookURL) ~= "string" then return end
 
     local data = {
         username = "ReloadArea Logger",
