@@ -1,7 +1,7 @@
 fx_version 'cerulean'
 game 'gta5'
 
-author 'idonttouchgrass development'
+author 'Hunter Harris'
 description 'Reload area texture optimization tool'
 version '1.1.0'
 
