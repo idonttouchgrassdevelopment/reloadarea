@@ -2,7 +2,7 @@
 fx_version 'cerulean'
 game 'gta5'
 
-author 'ReloadArea Dev'
+author 'idonttouchgrass Development'
 description 'Reloads local textures without removing vehicles or peds'
 version '1.0.0'
 
