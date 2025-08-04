@@ -1,101 +1,128 @@
--- Function to reload area via teleporting to beach
-function ReloadArea()
-    local playerPed = PlayerPedId()
-    local originalPos = GetEntityCoords(playerPed)
-    local beachCoords = vector3(-1600.0, -1045.0, 13.0)
 
-    -- Cooldown check
-    if ReloadAreaCooldown and (GetGameTimer() < ReloadAreaCooldown) then
-        local remaining = math.ceil((ReloadAreaCooldown - GetGameTimer()) / 1000)
+local teleportCoords = vector3(-1600.0, -1500.0, 0.0)
+local cooldownActive = false
+local cooldownSeconds = 15
+local reloadDuration = 10000
+
+RegisterCommand('reloadarea', function()
+    if cooldownActive then
         lib.notify({
             title = 'Reload Area',
-            description = ('Please wait %d seconds before using again.'):format(remaining),
+            description = 'Please wait for cooldown to finish.',
             type = 'error'
         })
         return
     end
 
-    -- Set cooldown
-    ReloadAreaCooldown = GetGameTimer() + (Config.ReloadAreaCooldown or 30000)
+    cooldownActive = true
+    reloadAreaTextures()
 
-    -- Fade out screen
-    DoScreenFadeOut(1000)
-    Wait(1000)
+    CreateThread(function()
+        Wait(cooldownSeconds * 1000)
+        cooldownActive = false
+        lib.notify({
+            title = 'Reload Area',
+            description = 'Cooldown expired. You can reload textures again.',
+            type = 'inform'
+        })
+    end)
+end)
 
-    -- Teleport to beach
-    SetEntityCoordsNoOffset(playerPed, beachCoords.x, beachCoords.y, beachCoords.z, false, false, false)
-    RequestCollisionAtCoord(beachCoords.x, beachCoords.y, beachCoords.z)
-    ClearAreaOfObjects(beachCoords.x, beachCoords.y, beachCoords.z, 50.0, false)
+RegisterKeyMapping('reloadarea', 'Reload Nearby Textures (Client-Side Keybind)', 'keyboard', '')
 
-    -- Make player invisible
-    SetEntityVisible(playerPed, false, false)
+function reloadAreaTextures()
+    local ped = PlayerPedId()
+    local originalCoords = GetEntityCoords(ped)
+    local heading = GetEntityHeading(ped)
 
-    -- Progress bar (ox_lib)
-    local finished = lib.progressBar({
-        duration = 3000,
-        label = 'Reloading area...',
-        useWhileDead = false,
-        canCancel = false,
-        disable = { car = true, move = true, combat = true }
-    })
+    optimizeClientTextures()
 
-    -- Wait and clear area assets
-    Wait(1000)
-    ClearAreaOfEverything(beachCoords.x, beachCoords.y, beachCoords.z, 50.0, false, false, false, false)
+    SetEntityCoordsNoOffset(ped, teleportCoords.x, teleportCoords.y, teleportCoords.z, false, false, false)
+    SetEntityHeading(ped, 180.0)
+    FreezeEntityPosition(ped, true)
+    SetEntityVisible(ped, false, false)
+    DisplayRadar(false)
 
-    -- Wait to simulate asset cleanup
-    Wait(2000)
-
-    -- Teleport back to original position
-    SetEntityCoordsNoOffset(playerPed, originalPos.x, originalPos.y, originalPos.z, false, false, false)
-    RequestCollisionAtCoord(originalPos.x, originalPos.y, originalPos.z)
-    ClearAreaOfObjects(originalPos.x, originalPos.y, originalPos.z, 50.0, false)
-
-    -- Prevent texture issues: force asset and collision loading
-    for i = 1, 30 do
-        RequestCollisionAtCoord(originalPos.x, originalPos.y, originalPos.z)
-        RequestAdditionalCollisionAtCoord(originalPos.x, originalPos.y, originalPos.z)
-        -- Force loading map tiles
-        SetFocusPosAndVel(originalPos.x, originalPos.y, originalPos.z, 0.0, 0.0, 0.0)
-        -- Wait a bit to allow streaming
-        Wait(50)
-        if HasCollisionLoadedAroundEntity(playerPed) then
-            break
-        end
-    end
-    ClearFocus()
-
-    -- Make player visible again
-    SetEntityVisible(playerPed, true, false)
-
-    -- Wait and fade in
-    Wait(1000)
-    DoScreenFadeIn(1000)
-
-    -- Notify player with ox_lib notification
     lib.notify({
         title = 'Reload Area',
-        description = 'Textures and environment reloaded.',
+        description = 'Refreshing textures... Please wait.',
+        type = 'inform'
+    })
+
+    Wait(reloadDuration)
+
+    RequestCollisionAtCoord(originalCoords)
+    local interior = GetInteriorAtCoords(originalCoords)
+    if interior ~= 0 then RefreshInterior(interior) end
+
+    for i = 1, 15 do
+        RequestCollisionAtCoord(originalCoords)
+        Wait(200)
+    end
+
+    local attempts = 0
+    while not HasCollisionLoadedAroundEntity(ped) and attempts < 30 do
+        RequestCollisionAtCoord(originalCoords)
+        Wait(250)
+        attempts += 1
+    end
+
+    SetEntityCoordsNoOffset(ped, originalCoords.x, originalCoords.y, originalCoords.z, false, false, false)
+    SetEntityHeading(ped, heading)
+    Wait(1000)
+
+    FreezeEntityPosition(ped, false)
+    SetEntityVisible(ped, true, false)
+    DisplayRadar(true)
+
+    lib.notify({
+        title = 'Reload Area',
+        description = 'Textures refreshed and optimized.',
         type = 'success'
     })
+
+    -- sendWebhookLog(originalCoords)
 end
 
--- Command
-RegisterCommand("reloadarea", function()
-    ReloadArea()
-end, false)
+function optimizeClientTextures()
+    SetReducePedModelBudget(true)
+    SetReduceVehicleModelBudget(true)
 
--- Chat suggestion
-TriggerEvent('chat:addSuggestion', '/reloadarea', 'Teleports you to a beach temporarily to reload area textures')
+    ClearFocus()
+    ClearHdArea()
+    ClearAllBrokenGlass()
+    ClearTimecycleModifier()
+    SetTimecycleModifier("neutral")
+    SetTimecycleModifierStrength(0.0)
 
--- Keybind (F5)
--- The code you have already achieves the goal: it teleports the player to a beach, clears the area to force texture/asset reload, waits, and then teleports the player back. 
--- If you want to further ensure textures are reloaded, you can add a call to RequestCollisionAtCoord and ClearAreaOfObjects for extra asset cleanup.
+    TriggerEvent("graphics:flush")
 
--- Example: Add after teleporting to the beach
-RequestCollisionAtCoord(beachCoords.x, beachCoords.y, beachCoords.z)
-ClearAreaOfObjects(beachCoords.x, beachCoords.y, beachCoords.z, 50.0, false)
+    Wait(300)
 
--- And after teleporting back to the original position
-RequestCollisionAtCoord(originalPos.x, originalPos.y, originalPos.z)
-ClearAreaOfObjects(originalPos.x, originalPos.y, originalPos.z, 50.0, false)
+    SetReducePedModelBudget(false)
+    SetReduceVehicleModelBudget(false)
+end
+
+function sendWebhookLog(coords)
+    local webhookUrl = "https://yourwebhookurl.com" -- Replace with actual webhook URL
+    local name = GetPlayerName(PlayerId())
+    local serverId = GetPlayerServerId(PlayerId())
+
+    local data = {
+        username = "ReloadArea Logger",
+        embeds = {{
+            title = "Texture Reload Triggered",
+            color = 65280,
+            fields = {
+                { name = "Player", value = name .. " [" .. serverId .. "]", inline = true },
+                { name = "Position", value = ("X: %.2f, Y: %.2f, Z: %.2f"):format(coords.x, coords.y, coords.z), inline = false },
+                { name = "Time", value = os.date("%Y-%m-%d %H:%M:%S"), inline = true }
+            },
+            footer = { text = "Texture Reload Log" }
+        }}
+    }
+
+    PerformHttpRequest(webhookUrl, function() end, "POST", json.encode(data), {
+        ["Content-Type"] = "application/json"
+    })
+end
