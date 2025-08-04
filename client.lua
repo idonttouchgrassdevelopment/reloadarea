@@ -1,9 +1,18 @@
-local teleportCoords = vec3(-2083.26, -1019.12, 15.99)
+local teleportCoords = vector3(-1600.0, -1500.0, 0.0)
 local cooldownActive = false
 local cooldownSeconds = 45
 local reloadDuration = 5000
 
 RegisterCommand('reloadarea', function()
+    if not lib.hasPermission(Config.OxPermission) then
+        lib.notify({
+            title = 'Reload Area',
+            description = 'You do not have permission to use this command.',
+            type = 'error'
+        })
+        return
+    end
+
     if cooldownActive then
         lib.notify({
             title = 'Reload Area',
@@ -36,6 +45,9 @@ function reloadAreaTextures()
 
     optimizeClientTextures()
 
+    RequestCollisionAtCoord(teleportCoords)
+    Wait(1000)
+
     SetEntityVisible(ped, false, false)
     SetEntityCoordsNoOffset(ped, teleportCoords.x, teleportCoords.y, teleportCoords.z, false, false, false)
     SetEntityHeading(ped, 180.0)
@@ -48,38 +60,37 @@ function reloadAreaTextures()
         type = 'inform'
     })
 
-    CreateThread(function()
-        local endTime = GetGameTimer() + reloadDuration
-        while GetGameTimer() < endTime do
-            HideHudComponentThisFrame(0)
-            HideHudComponentThisFrame(1)
-            HideHudComponentThisFrame(2)
-            HideHudComponentThisFrame(3)
-            HideHudComponentThisFrame(4)
-            HideHudComponentThisFrame(6)
-            HideHudComponentThisFrame(7)
-            HideHudComponentThisFrame(8)
-            HideHudComponentThisFrame(9)
-            HideHudComponentThisFrame(13)
-            HideHudComponentThisFrame(14)
-            HideHudComponentThisFrame(17)
-            HideHudComponentThisFrame(20)
-            DisableAllControlActions(0)
-            Wait(0)
-        end
-    end)
+    local endTime = GetGameTimer() + reloadDuration
+    while GetGameTimer() < endTime do
+        HideHudComponentThisFrame(0)
+        HideHudComponentThisFrame(1)
+        HideHudComponentThisFrame(2)
+        HideHudComponentThisFrame(3)
+        HideHudComponentThisFrame(4)
+        HideHudComponentThisFrame(6)
+        HideHudComponentThisFrame(7)
+        HideHudComponentThisFrame(8)
+        HideHudComponentThisFrame(9)
+        HideHudComponentThisFrame(13)
+        HideHudComponentThisFrame(14)
+        HideHudComponentThisFrame(17)
+        HideHudComponentThisFrame(20)
+        DisableAllControlActions(0)
+        Wait(0)
+    end
 
-    Wait(reloadDuration)
-
-    RequestCollisionAtCoord(originalCoords)
-    SetEntityCoordsNoOffset(ped, originalCoords.x, originalCoords.y, originalCoords.z, false, false, false)
-    SetEntityHeading(ped, heading)
-    SetEntityVisible(ped, true, false)
-
+    -- Preload original location
     for i = 1, 5 do
         RequestCollisionAtCoord(originalCoords)
         Wait(300)
     end
+
+    SetEntityCoordsNoOffset(ped, originalCoords.x, originalCoords.y, originalCoords.z, false, false, false)
+    SetEntityHeading(ped, heading)
+
+    ClearTimecycleModifier()
+    SetTimecycleModifier("default")
+    SetTimecycleModifierStrength(1.0)
 
     ClearFocus()
     SetFocusPosAndVel(originalCoords.x, originalCoords.y, originalCoords.z, 0.0, 0.0, 0.0)
@@ -87,6 +98,7 @@ function reloadAreaTextures()
     local interior = GetInteriorAtCoords(originalCoords.x, originalCoords.y, originalCoords.z)
     if interior ~= 0 then RefreshInterior(interior) end
 
+    SetEntityVisible(ped, true, false)
     FreezeEntityPosition(ped, false)
     DisplayRadar(true)
 
@@ -111,18 +123,33 @@ function optimizeClientTextures()
     SetTimecycleModifierStrength(0.0)
 
     TriggerEvent("graphics:flush")
-
-    Wait(300)
+    Wait(500)
 
     SetReducePedModelBudget(false)
     SetReduceVehicleModelBudget(false)
 end
 
 function sendWebhookLog(coords)
-    if type(Config) ~= "table" or not Config.WebhookEnabled then return end
+    if not Config.WebhookEnabled then return end
 
     local name = GetPlayerName(PlayerId())
     local serverId = GetPlayerServerId(PlayerId())
 
-    TriggerServerEvent("reloadarea:logReload", name, serverId, coords)
+    local data = {
+        username = "ReloadArea Logger",
+        embeds = {{
+            title = "Texture Reload Triggered",
+            color = 65280,
+            fields = {
+                { name = "Player", value = name .. " [" .. serverId .. "]", inline = true },
+                { name = "Position", value = ("X: %.2f, Y: %.2f, Z: %.2f"):format(coords.x, coords.y, coords.z), inline = false },
+                { name = "Time", value = os.date("%Y-%m-%d %H:%M:%S"), inline = true }
+            },
+            footer = { text = "Texture Reload Log" }
+        }}
+    }
+
+    PerformHttpRequest(Config.WebhookURL, function() end, "POST", json.encode(data), {
+        ["Content-Type"] = "application/json"
+    })
 end
