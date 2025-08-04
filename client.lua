@@ -1,4 +1,4 @@
-local teleportCoords = vec3(-2083.26, -1019.12, 15.99)
+local teleportCoords = vector3(-1600.0, -1500.0, 0.0)
 local cooldownActive = false
 local cooldownSeconds = 45
 local reloadDuration = 5000
@@ -36,7 +36,7 @@ RegisterCommand('reloadarea', function()
     end)
 end)
 
-RegisterKeyMapping('reloadarea', 'Reload Nearby Textures', 'keyboard', '')
+RegisterKeyMapping('reloadarea', 'Reload Nearby Textures (Client-Side Keybind)', 'keyboard', '')
 
 function reloadAreaTextures()
     local ped = PlayerPedId()
